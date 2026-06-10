@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger.debug(f"OPENROUTER_API_KEY set: {'Yes' if settings.OPENROUTER_API_KEY else 'No'}")
 
 async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
     """
