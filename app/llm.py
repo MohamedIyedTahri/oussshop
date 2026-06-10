@@ -1,18 +1,13 @@
+import logging
 import httpx
 import json
 import re
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-logger.debug(f"OPENROUTER_API_KEY set: {'Yes' if settings.OPENROUTER_API_KEY else 'No'}")
-
-# ... (rest of file unchanged)
-# after payload creation, log model
-logger.info(f"Calling OpenRouter with model {settings.OPENROUTER_MODEL}")
 from typing import List, Optional, Dict, Any
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 logger.debug(f"OPENROUTER_API_KEY set: {'Yes' if settings.OPENROUTER_API_KEY else 'No'}")
+
 
 async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
     """
@@ -20,7 +15,6 @@ async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
     """
     if not settings.OPENROUTER_API_KEY or settings.OPENROUTER_API_KEY == "your_openrouter_api_key_here":
         logger.warning("OPENROUTER_API_KEY is not configured. Returning mock response.")
-        # Return fallback response for testing if key is not configured
         if "intent" in system_prompt.lower():
             return json.dumps({
                 "intent": "product_search",
@@ -32,10 +26,10 @@ async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
     headers = {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/google/antigravity",
+        "HTTP-Referer": "https://equip-home.tn",
         "X-Title": "Tunisian E-commerce Chatbot"
     }
-    
+
     payload = {
         "model": settings.OPENROUTER_MODEL,
         "messages": [
@@ -44,14 +38,16 @@ async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
         ],
         "temperature": 0.1
     }
-    
+
+    logger.info(f"Calling OpenRouter with model: {settings.OPENROUTER_MODEL}")
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=15.0
+                timeout=30.0
             )
             response.raise_for_status()
             res_data = response.json()
@@ -60,6 +56,7 @@ async def call_openrouter(system_prompt: str, user_prompt: str) -> str:
             logger.error(f"OpenRouter API call failed: {e}")
             raise e
 
+
 def extract_json(text: str) -> dict:
     """
     Attempts to extract and parse JSON from a response string.
@@ -67,7 +64,6 @@ def extract_json(text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # Try finding json block within curly braces
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             try:
@@ -75,6 +71,7 @@ def extract_json(text: str) -> dict:
             except json.JSONDecodeError:
                 pass
         raise ValueError("Could not extract valid JSON from response")
+
 
 async def detect_intent_and_extract(message: str) -> dict:
     """
@@ -88,10 +85,10 @@ async def detect_intent_and_extract(message: str) -> dict:
         "1. 'product_search': User wants to find a specific product (e.g. 'nlawej 3la aspirateur', 'fama microonde?').\n"
         "2. 'price_inquiry': User asks specifically about a product's price (e.g. '9adeh soum el ventilateur?', 'aspirateur b9adech?').\n"
         "3. 'recommendation': User asks for recommendations or ideas (e.g. 'chneya a7sen ventilateur 3andkom?', 'ansahni b egouttoir behi').\n"
-        "4. 'faq': User asks about delivery, payment terms, shop location, returns (e.g. 'kifech l'livraison?', 'kifech ndfa3?', 'fin jeyin?').\n"
+        "4. 'faq': User asks about delivery, payment terms, shop location, returns (e.g. 'kifech l livraison?', 'kifech ndfa3?', 'fin jeyin?').\n"
         "5. 'smalltalk': Greetings, thank yous, goodbye, or general talk (e.g. 'aslema', 'salam', 'ya3tikom saha').\n\n"
         "Extract:\n"
-        "- 'keywords': Search keywords translated into French or standard English (since the catalog is in French, e.g. if they say 'aspirateur', keywords='aspirateur'; 'tawa9e3 s7an' -> keywords='egouttoir vaisselle'). Keep keywords simple and focused on nouns.\n"
+        "- 'keywords': Search keywords translated into French or standard English (e.g. if they say 'aspirateur', keywords='aspirateur'; 'tawa9e3 s7an' -> keywords='egouttoir vaisselle'). Keep keywords simple and focused on nouns.\n"
         "- 'price_limit': The maximum price (number only) in TND if they mention a budget (e.g. 'a9al men 100dt' -> 100, 'b 50dt' -> 50). Otherwise, null.\n\n"
         "You must respond ONLY with a JSON object in this format (no conversational filler):\n"
         "{\n"
@@ -100,23 +97,22 @@ async def detect_intent_and_extract(message: str) -> dict:
         "  \"price_limit\": float or null\n"
         "}"
     )
-    
+
     try:
         response_text = await call_openrouter(system_prompt, f"User message: '{message}'")
         parsed = extract_json(response_text)
-        # Validate intent
         valid_intents = ["product_search", "price_inquiry", "recommendation", "faq", "smalltalk"]
         if parsed.get("intent") not in valid_intents:
             parsed["intent"] = "smalltalk"
         return parsed
     except Exception as e:
         logger.error(f"Error in intent detection: {e}")
-        # Default fallback
         return {
             "intent": "product_search",
             "keywords": message,
             "price_limit": None
         }
+
 
 async def generate_response(
     message: str,
@@ -138,16 +134,15 @@ async def generate_response(
         "5. Keep the response short and conversational (1-3 sentences).\n\n"
         "Store FAQ Context for reference:\n"
         "- Delivery (Livraison): All over Tunisia (toute la Tunisie), price is 7 TND, delivery time is 2 to 3 business days.\n"
-        "- Payment (Paiement): Cash on delivery (Paiement à la livraison) or credit card online.\n"
+        "- Payment (Paiement): Cash on delivery (Paiement a la livraison) or credit card online.\n"
         "- Availability: If no product is found matching, politely explain that we don't have it in stock currently.\n"
     )
-    
-    # Format products for the prompt
+
     product_context = ""
     if products:
         product_context = "Here are the matching products in our store database:\n"
         for p in products:
-            price_val = f"{p.price} TND" if p.price else (p.price_str or "Non spécifié")
+            price_val = f"{p.price} TND" if p.price else (p.price_str or "Non specifie")
             product_context += (
                 f"- ID: {p.id}\n"
                 f"  Title: {p.title}\n"
@@ -158,14 +153,14 @@ async def generate_response(
             )
     else:
         product_context = "No products matched the search keywords in our database.\n"
-        
+
     user_prompt = (
         f"User Message: '{message}'\n"
         f"Detected Intent: {intent}\n"
         f"Product Context:\n{product_context}\n"
         "Please generate a response in Tunisian Derja."
     )
-    
+
     try:
         response_text = await call_openrouter(system_prompt, user_prompt)
         return response_text
