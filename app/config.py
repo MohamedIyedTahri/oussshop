@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DATABASE_URL: str
     OPENROUTER_API_KEY: str
-    OPENROUTER_MODEL: str = "meta-llama/llama-3-8b-instruct:free"
+    OPENROUTER_MODEL: str = "nvidia/llama-nemotron-rerank-vl-1b-v2"
     FEED_URL: str = "https://equip-home.tn/api/meta/meta-feed.xml"
     
     @field_validator("DATABASE_URL", mode="before")
