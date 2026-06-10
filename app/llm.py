@@ -1,7 +1,13 @@
 import httpx
 import json
 import re
-import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.debug(f"OPENROUTER_API_KEY set: {'Yes' if settings.OPENROUTER_API_KEY else 'No'}")
+
+# ... (rest of file unchanged)
+# after payload creation, log model
+logger.info(f"Calling OpenRouter with model {settings.OPENROUTER_MODEL}")
 from typing import List, Optional, Dict, Any
 from app.config import settings
 
